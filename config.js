@@ -78,7 +78,7 @@ export const CONFIG = {
         SOUTH: 90,
         EAST: 0,
         WEST: 180
-    }
+    },
 
     // Adaptive mode settings
     ADAPTIVE_SETTINGS: {
