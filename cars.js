@@ -13,7 +13,7 @@ export class Car {
         this.toDirection = this.route[2];
 
         // Position and movement
-        const spawnPoint = intersection.spawnPoints[direction];
+        const spawnPoint = intersection.getSpawnPointForLane(direction, lane);
         this.x = spawnPoint.x;
         this.y = spawnPoint.y;
         this.angle = this.getInitialAngle();

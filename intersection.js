@@ -88,22 +88,25 @@ this.stopLines = {
         // Car spawn points
         this.spawnPoints = {
             [CONFIG.DIRECTIONS.NORTH]: {
-                x: this.centerX - laneOffset, // Right lane for cars going south
+                x: this.centerX - laneOffset, // Default to right lane
                 y: 0
             },
             [CONFIG.DIRECTIONS.EAST]: {
                 x: CONFIG.CANVAS_WIDTH,
-                y: this.centerY - laneOffset // Right lane for cars going west
+                y: this.centerY - laneOffset // Default to right lane
             },
             [CONFIG.DIRECTIONS.SOUTH]: {
-                x: this.centerX + laneOffset, // Right lane for cars going north
+                x: this.centerX + laneOffset, // Default to right lane
                 y: CONFIG.CANVAS_HEIGHT
             },
             [CONFIG.DIRECTIONS.WEST]: {
                 x: 0,
-                y: this.centerY + laneOffset // Right lane for cars going east
+                y: this.centerY + laneOffset // Default to right lane
             }
         };
+        
+        // Update spawn points to support both lanes
+        this.updateSpawnPointsForLanes();
 
         // Exit points - these are for straight-through traffic
         this.exitPoints = {
@@ -124,6 +127,34 @@ this.stopLines = {
                 y: this.centerY - laneOffset
             }
         };
+    }
+
+    updateSpawnPointsForLanes() {
+        const laneOffset = this.laneWidth / 2;
+        
+        // Create spawn points for both lanes
+        this.spawnPointsByLane = {
+            [CONFIG.DIRECTIONS.NORTH]: [
+                { x: this.centerX - laneOffset, y: 0 }, // Lane 0 (left)
+                { x: this.centerX + laneOffset, y: 0 }  // Lane 1 (right)
+            ],
+            [CONFIG.DIRECTIONS.EAST]: [
+                { x: CONFIG.CANVAS_WIDTH, y: this.centerY - laneOffset }, // Lane 0 (left)
+                { x: CONFIG.CANVAS_WIDTH, y: this.centerY + laneOffset }  // Lane 1 (right)
+            ],
+            [CONFIG.DIRECTIONS.SOUTH]: [
+                { x: this.centerX + laneOffset, y: CONFIG.CANVAS_HEIGHT }, // Lane 0 (left)
+                { x: this.centerX - laneOffset, y: CONFIG.CANVAS_HEIGHT }  // Lane 1 (right)
+            ],
+            [CONFIG.DIRECTIONS.WEST]: [
+                { x: 0, y: this.centerY + laneOffset }, // Lane 0 (left)
+                { x: 0, y: this.centerY - laneOffset }  // Lane 1 (right)
+            ]
+        };
+    }
+
+    getSpawnPointForLane(direction, lane) {
+        return this.spawnPointsByLane[direction] ? this.spawnPointsByLane[direction][lane] : this.spawnPoints[direction];
     }
 
     render(ctx) {
