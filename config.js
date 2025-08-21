@@ -32,7 +32,9 @@ export const CONFIG = {
 
     // Turn types
     TURN_TYPES: {
-        STRAIGHT: 'straight'
+        STRAIGHT: 'straight',
+        LEFT: 'left',
+        RIGHT: 'right'
     },
 
     // Modes
@@ -58,10 +60,25 @@ export const CONFIG = {
         RED_DURATION: 100000,        // 100 seconds
         CAR_SPAWN_RATE: 4,           // cars per 10 seconds
         CAR_SPEED: 25,               // pixels per second
-        TURN_RATE: 0.25,             // 25% chance to turn
+        TURN_RATE: 0.4,              // 40% chance to turn (20% left, 20% right)
     DETECTOR_DISTANCE: 500,      // Increased range for adaptive mode
         MIN_GREEN_TIME: 5000         // 5 seconds minimum green
     },
+
+    // Turn delays (based on arc length / speed)
+    TURN_DELAYS: {
+        LEFT: 2000,    // 2 seconds for left turn
+        RIGHT: 1500,   // 1.5 seconds for right turn
+        STRAIGHT: 0    // No delay for straight
+    },
+
+    // Heading angles in degrees
+    HEADINGS: {
+        NORTH: 270,
+        SOUTH: 90,
+        EAST: 0,
+        WEST: 180
+    }
 
     // Adaptive mode settings
     ADAPTIVE_SETTINGS: {

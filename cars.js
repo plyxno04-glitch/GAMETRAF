@@ -26,27 +26,26 @@ export class Car {
         this.color = CONFIG.CAR_COLORS[Math.floor(Math.random() * CONFIG.CAR_COLORS.length)];
 
         // State
-        this.state = 'approaching'; // approaching, waiting, crossing, exiting, completed
+        this.state = 'approaching'; // approaching, waiting, crossing, turning, exiting, completed
         this.waitStartTime = null;
         this.totalWaitTime = 0;
         this.isInIntersection = false;
         this.pathProgress = 0;
+        this.turnStartTime = null;
+        this.isHidden = false;
 
         // Calculate target position for movement
         this.calculateTargetPosition();
     }
 
     calculateTurnType() {
-        // Determine turn type from route
-        if (!this.route || this.route.length < 3) return CONFIG.TURN_TYPES.STRAIGHT;
-        const from = this.route[0];
-        const to = this.route[2];
-        const dirs = [CONFIG.DIRECTIONS.NORTH, CONFIG.DIRECTIONS.EAST, CONFIG.DIRECTIONS.SOUTH, CONFIG.DIRECTIONS.WEST];
-        const fromIdx = dirs.indexOf(from);
-        const toIdx = dirs.indexOf(to);
-        const diff = (toIdx - fromIdx + 4) % 4;
-        if (diff === 1) return 'right';
-        if (diff === 3) return 'left';
+        // Random turn decision based on TURN_RATE
+        const rand = Math.random();
+        if (rand < CONFIG.DEFAULT_SETTINGS.TURN_RATE / 2) {
+            return CONFIG.TURN_TYPES.LEFT;
+        } else if (rand < CONFIG.DEFAULT_SETTINGS.TURN_RATE) {
+            return CONFIG.TURN_TYPES.RIGHT;
+        }
         return CONFIG.TURN_TYPES.STRAIGHT;
     }
 
@@ -107,10 +106,19 @@ export class Car {
     }
 
     calculateToDirection() {
-        // Only straight
+        // Calculate destination based on turn type
         const directions = [CONFIG.DIRECTIONS.NORTH, CONFIG.DIRECTIONS.EAST, CONFIG.DIRECTIONS.SOUTH, CONFIG.DIRECTIONS.WEST];
         const currentIndex = directions.indexOf(this.fromDirection);
-        return directions[(currentIndex + 2) % 4]; // Go straight
+        
+        switch (this.turnType) {
+            case CONFIG.TURN_TYPES.LEFT:
+                return directions[(currentIndex + 3) % 4]; // Turn left
+            case CONFIG.TURN_TYPES.RIGHT:
+                return directions[(currentIndex + 1) % 4]; // Turn right
+            case CONFIG.TURN_TYPES.STRAIGHT:
+            default:
+                return directions[(currentIndex + 2) % 4]; // Go straight
+        }
     }
 
     getInitialAngle() {
@@ -150,13 +158,16 @@ calculateTargetPosition() {
             case 'crossing':
                 this.updateCrossing(dt);
                 break;
+            case 'turning':
+                this.updateTurning(dt);
+                break;
             case 'exiting':
                 this.updateExiting(dt);
                 break;
         }
 
         // Update position based on speed and direction (keep cars in straight lines)
-        if (this.speed > 0) {
+        if (this.speed > 0 && !this.isHidden) {
             // Move based on the angle the car is facing
             this.x += Math.cos(this.angle) * this.speed * dt;
             this.y += Math.sin(this.angle) * this.speed * dt;
@@ -213,12 +224,166 @@ calculateTargetPosition() {
     updateCrossing(dt) {
         // Accelerate through intersection
         this.speed = Math.min(this.maxSpeed * 1.2, this.speed + 40 * dt);
-        // No turning, just go straight
-        // Check if we've exited the intersection
-        if (!this.isInIntersection && this.pathProgress > 0) {
-            this.state = 'exiting';
+        
+        // Check if we need to turn or go straight
+        if (this.turnType !== CONFIG.TURN_TYPES.STRAIGHT) {
+            // Check if we've reached the intersection center
+            const centerX = this.intersection.centerX;
+            const centerY = this.intersection.centerY;
+            const distanceToCenter = Math.sqrt(
+                Math.pow(this.x - centerX, 2) + Math.pow(this.y - centerY, 2)
+            );
+            
+            if (distanceToCenter < 20) { // Close enough to center
+                this.state = 'turning';
+                this.turnStartTime = Date.now();
+                this.isHidden = true;
+                this.speed = 0;
+                return;
+            }
+        } else {
+            // Straight through - check if we've exited the intersection
+            if (!this.isInIntersection && this.pathProgress > 0) {
+                this.state = 'exiting';
+            }
         }
+        
         this.pathProgress += dt;
+    }
+
+    updateTurning(dt) {
+        // Wait for turn delay
+        const turnDelay = CONFIG.TURN_DELAYS[this.turnType] || 0;
+        const elapsedTime = Date.now() - this.turnStartTime;
+        
+        if (elapsedTime >= turnDelay) {
+            // Teleport to exit position
+            const exitInfo = this.getExitPosition(this.fromDirection, this.turnType, this.lane);
+            this.x = exitInfo.x;
+            this.y = exitInfo.y;
+            this.angle = this.degreesToRadians(exitInfo.heading);
+            this.fromDirection = exitInfo.direction;
+            
+            // Resume movement
+            this.isHidden = false;
+            this.speed = this.maxSpeed;
+            this.state = 'exiting';
+            this.turnStartTime = null;
+        }
+    }
+
+    getExitPosition(fromDirection, turnType, lane) {
+        const cx = this.intersection.centerX;
+        const cy = this.intersection.centerY;
+        const roadWidth = CONFIG.ROAD_WIDTH;
+        const laneWidth = CONFIG.LANE_WIDTH;
+        const intersectionSize = CONFIG.INTERSECTION_SIZE;
+        
+        // Calculate lane offset from road center
+        const laneOffset = (lane - 0.5) * laneWidth;
+        const roadDistance = intersectionSize / 2 + 10; // Distance from center to road edge
+        
+        let exitDirection, x, y, heading;
+        
+        switch (fromDirection) {
+            case CONFIG.DIRECTIONS.NORTH:
+                switch (turnType) {
+                    case CONFIG.TURN_TYPES.STRAIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.SOUTH;
+                        x = cx + laneOffset;
+                        y = cy + roadDistance;
+                        heading = CONFIG.HEADINGS.SOUTH;
+                        break;
+                    case CONFIG.TURN_TYPES.LEFT:
+                        exitDirection = CONFIG.DIRECTIONS.EAST;
+                        x = cx + roadDistance;
+                        y = cy + laneOffset;
+                        heading = CONFIG.HEADINGS.EAST;
+                        break;
+                    case CONFIG.TURN_TYPES.RIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.WEST;
+                        x = cx - roadDistance;
+                        y = cy - laneOffset;
+                        heading = CONFIG.HEADINGS.WEST;
+                        break;
+                }
+                break;
+                
+            case CONFIG.DIRECTIONS.SOUTH:
+                switch (turnType) {
+                    case CONFIG.TURN_TYPES.STRAIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.NORTH;
+                        x = cx - laneOffset;
+                        y = cy - roadDistance;
+                        heading = CONFIG.HEADINGS.NORTH;
+                        break;
+                    case CONFIG.TURN_TYPES.LEFT:
+                        exitDirection = CONFIG.DIRECTIONS.WEST;
+                        x = cx - roadDistance;
+                        y = cy - laneOffset;
+                        heading = CONFIG.HEADINGS.WEST;
+                        break;
+                    case CONFIG.TURN_TYPES.RIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.EAST;
+                        x = cx + roadDistance;
+                        y = cy + laneOffset;
+                        heading = CONFIG.HEADINGS.EAST;
+                        break;
+                }
+                break;
+                
+            case CONFIG.DIRECTIONS.EAST:
+                switch (turnType) {
+                    case CONFIG.TURN_TYPES.STRAIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.WEST;
+                        x = cx - roadDistance;
+                        y = cy + laneOffset;
+                        heading = CONFIG.HEADINGS.WEST;
+                        break;
+                    case CONFIG.TURN_TYPES.LEFT:
+                        exitDirection = CONFIG.DIRECTIONS.NORTH;
+                        x = cx - laneOffset;
+                        y = cy - roadDistance;
+                        heading = CONFIG.HEADINGS.NORTH;
+                        break;
+                    case CONFIG.TURN_TYPES.RIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.SOUTH;
+                        x = cx + laneOffset;
+                        y = cy + roadDistance;
+                        heading = CONFIG.HEADINGS.SOUTH;
+                        break;
+                }
+                break;
+                
+            case CONFIG.DIRECTIONS.WEST:
+                switch (turnType) {
+                    case CONFIG.TURN_TYPES.STRAIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.EAST;
+                        x = cx + roadDistance;
+                        y = cy - laneOffset;
+                        heading = CONFIG.HEADINGS.EAST;
+                        break;
+                    case CONFIG.TURN_TYPES.LEFT:
+                        exitDirection = CONFIG.DIRECTIONS.SOUTH;
+                        x = cx + laneOffset;
+                        y = cy + roadDistance;
+                        heading = CONFIG.HEADINGS.SOUTH;
+                        break;
+                    case CONFIG.TURN_TYPES.RIGHT:
+                        exitDirection = CONFIG.DIRECTIONS.NORTH;
+                        x = cx - laneOffset;
+                        y = cy - roadDistance;
+                        heading = CONFIG.HEADINGS.NORTH;
+                        break;
+                }
+                break;
+        }
+        
+        return { direction: exitDirection, x, y, heading };
+    }
+
+    degreesToRadians(degrees) {
+        return (degrees * Math.PI) / 180;
     }
 
     getTargetExitAngle() {
@@ -275,6 +440,9 @@ calculateTargetPosition() {
     }
 
     render(ctx) {
+        // Don't render if car is hidden during turn
+        if (this.isHidden) return;
+        
         ctx.save();
         // Move to car position and rotate
         ctx.translate(this.x, this.y);
@@ -425,6 +593,9 @@ export class CarManager {
         const directions = [CONFIG.DIRECTIONS.NORTH, CONFIG.DIRECTIONS.EAST, CONFIG.DIRECTIONS.SOUTH, CONFIG.DIRECTIONS.WEST];
         const direction = directions[Math.floor(Math.random() * directions.length)];
         
+        // Randomly choose a lane (0 or 1)
+        const lane = Math.floor(Math.random() * 2);
+        
         // Check if there's space to spawn (no car too close to spawn point)
         const spawnPoint = this.intersection.spawnPoints[direction];
         const tooClose = this.cars.some(car => {
@@ -437,6 +608,7 @@ export class CarManager {
                 id: this.nextCarId++,
                 direction: direction,
                 intersection: this.intersection,
+                lane: lane
             });
             this.cars.push(car);
         }
