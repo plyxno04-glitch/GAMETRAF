@@ -7,7 +7,7 @@ export class Car {
         this.fromDirection = direction;
         this.intersection = intersection;
         this.route = route || [direction, 'intersection', this.calculateToDirection()];
-        this.lane = lane; // 0 = leftmost
+        this.lane = lane; // 0 = lane for one direction, 1 = lane for opposite direction
         this.lateralPosition = 0; // 0 = center of lane
         this.turnType = this.calculateTurnType();
         this.toDirection = this.route[2];
@@ -39,13 +39,7 @@ export class Car {
     }
 
     calculateTurnType() {
-        // Random turn decision based on TURN_RATE
-        const rand = Math.random();
-        if (rand < CONFIG.DEFAULT_SETTINGS.TURN_RATE / 2) {
-            return CONFIG.TURN_TYPES.LEFT;
-        } else if (rand < CONFIG.DEFAULT_SETTINGS.TURN_RATE) {
-            return CONFIG.TURN_TYPES.RIGHT;
-        }
+        // For now, all cars go straight since lanes are for bidirectional traffic
         return CONFIG.TURN_TYPES.STRAIGHT;
     }
 
@@ -106,19 +100,10 @@ export class Car {
     }
 
     calculateToDirection() {
-        // Calculate destination based on turn type
+        // All cars go straight through (opposite direction)
         const directions = [CONFIG.DIRECTIONS.NORTH, CONFIG.DIRECTIONS.EAST, CONFIG.DIRECTIONS.SOUTH, CONFIG.DIRECTIONS.WEST];
         const currentIndex = directions.indexOf(this.fromDirection);
-        
-        switch (this.turnType) {
-            case CONFIG.TURN_TYPES.LEFT:
-                return directions[(currentIndex + 3) % 4]; // Turn left
-            case CONFIG.TURN_TYPES.RIGHT:
-                return directions[(currentIndex + 1) % 4]; // Turn right
-            case CONFIG.TURN_TYPES.STRAIGHT:
-            default:
-                return directions[(currentIndex + 2) % 4]; // Go straight
-        }
+        return directions[(currentIndex + 2) % 4]; // Always go straight (opposite direction)
     }
 
     getInitialAngle() {
